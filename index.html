@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UTAU Voicebank Packager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* Base Variables (Light Mint Theme) */
+:root, [data-theme="light"] {
+  --bg: #dcedc8;
+  --panel: #c5e1a5;
+  --panel-header: #b2d78c;
+  --line: #aed581;
+  --txt: #33691e;
+  --txt-muted: #558b2f;
+  --accent: #1b5e20;
+  --accent-hover: #2e7d32;
+  --btn-bg: #aed581;
+  --btn-hover: #9ccc65;
+  --input-bg: #ffffff;
+  --input-border: #aed581;
+  --danger: #d32f2f;
+  --modal-bg: rgba(0,0,0,0.4);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg: #121212;
+  --panel: #1e1e1e;
+  --panel-header: #252526;
+  --line: #333333;
+  --txt: #d4d4d4;
+  --txt-muted: #888888;
+  --accent: #4ec9b0;
+  --accent-hover: #3ba38f;
+  --btn-bg: #2d2d2d;
+  --btn-hover: #3e3e42;
+  --input-bg: #121212;
+  --input-border: #444444;
+  --danger: #f14c4c;
+  --modal-bg: rgba(0,0,0,0.7);
+}
+
+* { box-sizing: border-box; transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+body {
+  margin: 0; font: 13px/1.4 system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--txt);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+header {
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: var(--panel-header); display: flex; justify-content: space-between;
+  align-items: center; flex-shrink: 0; flex-wrap: wrap; gap: 10px;
+}
+h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+h1 span { font-size: 11px; background: var(--btn-bg); color: var(--accent); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line); }
+
+button {
+  background: var(--btn-bg); border: 1px solid var(--line);
+  color: var(--txt); border-radius: 4px; padding: 6px 12px;
+  font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: 0.15s;
+}
+button:hover { background: var(--btn-hover); border-color: var(--accent); }
+button.primary {
+  background: var(--accent); color: var(--bg); border: none;
+  padding: 8px 20px; font-size: 13px; font-weight: 600;
+}
+button.primary:hover { background: var(--accent-hover); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.header-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.header-controls select { width: auto; padding: 4px 8px; cursor: pointer; }
+.header-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; user-select: none; }
+.header-toggle input { width: 16px; height: 16px; cursor: pointer; }
+
+.main-grid { display: grid; grid-template-columns: 480px 1fr; flex: 1; overflow: hidden; }
+.col-left { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; border-right: 1px solid var(--line); background: var(--bg); }
+.col-right { display: flex; flex-direction: column; overflow: hidden; background: var(--panel); }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.card-header h2 { font-size: 12px; text-transform: uppercase; color: var(--accent); margin: 0; letter-spacing: 0.5px; }
+.btn-mini { padding: 2px 8px; font-size: 11px; font-weight: 400; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid .full { grid-column: 1/-1; }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--txt-muted); }
+
+input, select, textarea {
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  border-radius: 4px; color: var(--txt); padding: 6px 8px; font: inherit;
+  font-size: 12px; width: 100%; outline: none; transition: 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type=checkbox] { width: auto; accent-color: var(--accent); cursor: pointer; }
+
+.drop-zone { border: 2px dashed var(--line); border-radius: 6px; padding: 15px; text-align: center; cursor: pointer; background: var(--bg); transition: 0.2s; }
+.drop-zone.dragover { border-color: var(--accent); background: rgba(78, 201, 176, 0.1); }
+.drop-zone p { margin: 0 0 8px 0; font-size: 12px; color: var(--txt-muted); }
+.file-list { margin-top: 8px; max-height: 120px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); font-size: 11px; }
+.file-item { display: flex; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--line); align-items: center; }
+.file-item:last-child { border-bottom: none; }
+
+/* Prefix Map */
+.pm-container { display: flex; flex-direction: column; height: 100%; }
+.pm-header { padding: 8px 12px; background: var(--panel-header); color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.pm-body { display: flex; flex: 1; overflow: hidden; }
+.pm-table-container { flex: 1; overflow-y: auto; background: var(--bg); }
+.pm-table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-family: ui-monospace, Consolas, monospace; }
+.pm-table th { position: sticky; top: 0; background: var(--panel); color: var(--txt-muted); padding: 6px 4px; text-align: left; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); font-weight: 600; z-index: 2; }
+.pm-table td { padding: 3px 4px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); color: var(--txt); }
+.pm-table tr:hover { background: var(--panel-header); }
+.pm-table tr.selected { background: rgba(78, 201, 176, 0.15); }
+.pm-table input[type=checkbox] { margin: 0; padding: 0; width: 14px; height: 14px; }
+
+.pm-controls { width: 240px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; }
+.pm-controls select, .pm-controls input { padding: 4px 6px; font-size: 11px; }
+.pm-controls button { padding: 5px 8px; font-size: 11px; text-align: center; }
+.pm-divider { height: 1px; background: var(--line); margin: 6px 0; }
+.pm-controls label { font-size: 11px; color: var(--txt-muted); margin-bottom: -2px; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--txt-muted); }
+
+/* Modals */
+.modal { display: none; position: fixed; inset: 0; background: var(--modal-bg); z-index: 100; align-items: center; justify-content: center; }
+.modal.active { display: flex; }
+.modal-content { background: var(--panel); padding: 16px; border-radius: 6px; width: 500px; max-width: 90%; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto; }
+.modal-content h3 { margin: 0; color: var(--accent); font-size: 14px; }
+.modal-content textarea { background: var(--bg); color: var(--txt); font-family: monospace; resize: vertical; height: 300px; border: 1px solid var(--line); }
+
+/* Custom Theme Builder */
+.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.color-picker-wrapper { display: flex; align-items: center; justify-content: space-between; background: var(--bg); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--line); }
+.color-picker-wrapper label { font-size: 12px; }
+.color-picker-wrapper input[type="color"] { width: 40px; height: 24px; padding: 0; border: 1px solid var(--line); cursor: pointer; background: none; }
+</style>
+</head>
+<body data-theme="light">
+
+<header>
+  <h1>UTAU Voicebank Packager <span>v8.0</span></h1>
+  
+  <div class="header-controls">
+    <!-- Language Switcher -->
+    <select id="langSelect">
+      <option value="en" selected>English</option>
+      <option value="ru">Русский</option>
+      <option value="ja">日本語</option>
+      <option value="zh">简体中文</option>
+      <option value="ko">한국어</option>
+      <option value="es">Español</option>
+    </select>
+
+    <!-- Theme Switcher -->
+    <button id="themeToggle" onclick="cycleTheme()">Light</button>
+    <button id="themeSettingsBtn" onclick="openThemeModal()" style="padding: 6px 10px;" data-i18n="btnThemeSettings">Settings</button>
+
+    <!-- Prefix Map Toggle -->
+    <label class="header-toggle">
+      <input type="checkbox" id="includePrefixMap" checked>
+      <span data-i18n="includePrefixMap">Include prefix.map</span>
+    </label>
+    
+    <span id="zipStatus" style="font-size:12px;color:var(--accent);font-weight:bold;min-width:80px;text-align:right"></span>
+    <button class="primary" id="buildZipBtn" data-i18n="buildZip">Build ZIP</button>
+  </div>
+</header>
+
+<div class="main-grid">
+  <div class="col-left">
+    
+    <!-- FILES -->
+    <div class="card">
+      <div class="card-header">
+        <h2 data-i18n="filesTitle">1. Files (WAV, OTO, IMG)</h2>
+        <span id="fileCounter" style="font-size:11px;color:var(--txt-muted)" data-i18n="noFiles">0 files</span>
+      </div>
+      <div class="drop-zone" id="dropZone">
+        <p data-i18n="dragDrop">Drag & drop folder or files here</p>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button type="button" onclick="document.getElementById('fileInput').click()" data-i18n="btnFiles">Files</button>
+          <button type="button" onclick="document.getElementById('folderInput').click()" data-i18n="btnFolder">Folder</button>
+        </div>
+        <input type="file" id="fileInput" multiple style="display:none">
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+      </div>
+      <div class="file-list" id="fileList">
+        <div style="padding:8px;text-align:center;color:var(--txt-muted)" data-i18n="noFilesSelected">No files selected</div>
+      </div>
+    </div>
+
+    <!-- README -->
+    <div class="card">
+      <div class="card-header">
+        <h2>2. readme.txt</h2>
+        <button class="btn-mini" onclick="showPreview('readme')" data-i18n="btnPreview">Preview</button>
+      </div>
+      <div class="grid">
+        <label class="f full"><span data-i18n="lblName">Name / Version</span><input id="r_name" value="Leo cv beta"></label>
+        <label class="f"><span data-i18n="lblDate">Release date</span><input id="r_date" value="2026/07/15"></label>
+        <label class="f"><span data-i18n="lblAuthor">Author</span><input id="r_author" value="h3lpm3_pls"></label>
+        <label class="f"><span>oto.ini</span><input id="r_oto" value="h3lpm3_pls"></label>
+        <label class="f"><span data-i18n="lblVoice">Voice</span><input id="r_voice" value="maxim maltsev(h3lpm3_pls)"></label>
+        <label class="f"><span data-i18n="lblLang">Language</span><input id="r_lang" value="Japanese"></label>
+        <label class="f"><span data-i18n="lblArt">Art</span><input id="r_art" value="h3lpm3_pls"></label>
+        <label class="f"><span data-i18n="lblSampleSong">Sample song</span><input id="r_song" value="idol Yaosobi"></label>
+        <label class="f full"><span>YouTube</span><input id="r_yt" value=""></label>
+        <label class="f full"><span data-i18n="lblFinalLine">Final line</span><input id="r_thanks" value="thanks for downloading! c:"></label>
+      </div>
+    </div>
+
+    <!-- CHARACTER.TXT -->
+    <div class="card">
+      <div class="card-header">
+        <h2>3. character.txt</h2>
+        <button class="btn-mini" onclick="showPreview('chartxt')" data-i18n="btnPreview">Preview</button>
+      </div>
+      <div class="grid">
+        <label class="f full"><span>name</span><input id="c_name" value="leo cv beta"></label>
+        <label class="f full"><span>author</span><input id="c_author" value="h3lpm3_pls"></label>
+        <label class="f"><span>image</span><input id="c_image" value="leopfp.JPG"></label>
+        <label class="f"><span>sample</span><input id="c_sample" value="sample.wav"></label>
+      </div>
+    </div>
+
+    <!-- CHARACTER.YAML -->
+    <div class="card">
+      <div class="card-header">
+        <h2>4. character.yaml</h2>
+        <button class="btn-mini" onclick="showPreview('charyaml')" data-i18n="btnPreview">Preview</button>
+      </div>
+      <div class="grid">
+        <label class="f"><span>singer_type</span><select id="y_type"><option>classic</option><option>cvvc</option><option>vccv</option></select></label>
+        <label class="f"><span>text_file_encoding</span><select id="y_enc"><option>shift_jis</option><option>utf-8</option></select></label>
+        <label class="f"><span>image</span><input id="y_image" value="icon.bmp"></label>
+        <label class="f"><span>portrait</span><input id="y_portrait" value="Zen_fullbody.png"></label>
+        <label class="f"><span>portrait_opacity</span><input id="y_opacity" type="number" step="0.1" value="0.5"></label>
+        <label class="f full"><span>default_phonemizer</span><input id="y_phonemizer" value="OpenUtau.Core.DefaultPhonemizer"></label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PREFIX MAP -->
+  <div class="col-right">
+    <div class="pm-container">
+      <div class="pm-header">
+        <span data-i18n="pmTitle">Prefix Map Editor</span>
+        <span id="pmSelectionCount" style="font-weight:normal;color:var(--txt-muted)" data-i18n="pmSelected">Selected: 0</span>
+      </div>
+      <div class="pm-body">
+        <div class="pm-table-container">
+          <table class="pm-table" id="pmTable">
+            <thead>
+              <tr>
+                <th style="width:24px"><input type="checkbox" id="pmSelectAll"></th>
+                <th data-i18n="pmTone">Tone</th>
+                <th data-i18n="pmPrefix">Prefix</th>
+                <th data-i18n="pmSuffix">Suffix</th>
+              </tr>
+            </thead>
+            <tbody id="pmTbody"></tbody>
+          </table>
+        </div>
+        
+        <div class="pm-controls">
+          <select id="pmGroup">
+            <option>(main)</option>
+            <option>High</option>
+            <option>Low</option>
+          </select>
+          <div class="pm-divider"></div>
+          <button id="pmSelectAllBtn" data-i18n="pmSelectAll">Select All</button>
+          
+          <label data-i18n="pmPrefix">Prefix</label>
+          <input type="text" id="pmBulkPrefix" placeholder="">
+          <label data-i18n="pmSuffix">Suffix</label>
+          <input type="text" id="pmBulkSuffix" placeholder="">
+          
+          <button id="pmApplyBtn" style="margin-top:4px" data-i18n="pmSet">Set</button>
+          <button id="pmClearBtn" data-i18n="pmClear">Clear</button>
+          
+          <div class="pm-divider"></div>
+          <button id="pmImportBtn" data-i18n="pmImport">Import</button>
+          <button id="pmExportBtn" style="margin-top:auto" data-i18n="pmExport">Export .map</button>
+          
+          <div class="pm-divider"></div>
+          <button onclick="resetPrefixMap()" data-i18n="pmReset">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal" id="previewModal">
+  <div class="modal-content">
+    <h3 id="previewTitle">Preview</h3>
+    <textarea id="previewText" readonly></textarea>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="primary" onclick="document.getElementById('previewModal').classList.remove('active')" data-i18n="btnClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="importModal">
+  <div class="modal-content">
+    <h3 data-i18n="importTitle">Import prefix.map</h3>
+    <p style="margin:0;font-size:12px;color:var(--txt-muted)" data-i18n="importHint">Paste text here (Tone [Tab] Prefix [Tab] Suffix)</p>
+    <textarea id="importTextArea" placeholder="C4&#9;&#9;↑&#10;A#3&#9;&#9;↓"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="document.getElementById('importModal').classList.remove('active')" data-i18n="btnCancel">Cancel</button>
+      <button class="primary" onclick="applyImport()" data-i18n="pmImport">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Theme Modal -->
+<div class="modal" id="themeModal">
+  <div class="modal-content">
+    <h3 data-i18n="themeTitle">Custom Theme Settings</h3>
+    <p style="margin:0;font-size:12px;color:var(--txt-muted)" data-i18n="themeHint">Customize colors and save your own theme.</p>
+    
+    <div class="theme-grid">
+      <div class="color-picker-wrapper">
+        <label>Background</label>
+        <input type="color" id="c-bg" data-var="--bg">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Panel</label>
+        <input type="color" id="c-panel" data-var="--panel">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Header</label>
+        <input type="color" id="c-panel-header" data-var="--panel-header">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Borders</label>
+        <input type="color" id="c-line" data-var="--line">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Text</label>
+        <input type="color" id="c-txt" data-var="--txt">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Muted Text</label>
+        <input type="color" id="c-txt-muted" data-var="--txt-muted">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Accent</label>
+        <input type="color" id="c-accent" data-var="--accent">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Button Bg</label>
+        <input type="color" id="c-btn-bg" data-var="--btn-bg">
+      </div>
+      <div class="color-picker-wrapper">
+        <label>Input Bg</label>
+        <input type="color" id="c-input-bg" data-var="--input-bg">
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+      <button onclick="document.getElementById('themeModal').classList.remove('active')" data-i18n="btnCancel">Cancel</button>
+      <button class="primary" onclick="saveCustomTheme()" data-i18n="btnSaveTheme">Save & Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+let pmData = [];
+let currentLang = 'en';
+let currentTheme = 'light';
+
+// --- Translations Dictionary ---
+const translations = {
+  en: {
+    buildZip: "Build ZIP", includePrefixMap: "Include prefix.map",
+    filesTitle: "1. Files (WAV, OTO, IMG)", noFiles: "0 files", dragDrop: "Drag & drop folder or files here",
+    btnFiles: "Files", btnFolder: "Folder", noFilesSelected: "No files selected",
+    lblName: "Name / Version", lblDate: "Release date", lblAuthor: "Author", lblVoice: "Voice",
+    lblLang: "Language", lblArt: "Art", lblSampleSong: "Sample song", lblFinalLine: "Final line",
+    btnPreview: "Preview", pmTitle: "Prefix Map Editor", pmSelected: "Selected: 0",
+    pmTone: "Tone", pmPrefix: "Prefix", pmSuffix: "Suffix", pmSelectAll: "Select All",
+    pmSet: "Set", pmClear: "Clear", pmImport: "Import", pmExport: "Export .map", pmReset: "Reset",
+    btnClose: "Close", btnCancel: "Cancel", importTitle: "Import prefix.map",
+    importHint: "Paste text here (Tone [Tab] Prefix [Tab] Suffix)",
+    alertPackaging: "Packaging...", alertPreparing: "Preparing...", alertCompressing: "Compressing...",
+    alertDone: "Done!", alertError: "Error", alertConfirmReset: "Reset all prefixes?",
+    counterFiles: "files", counterSelected: "Selected: ",
+    btnThemeSettings: "Settings", btnSaveTheme: "Save & Apply", themeTitle: "Custom Theme Settings",
+    themeHint: "Customize colors and save your own theme.", light: "Light", dark: "Dark", custom: "Custom"
+  },
+  ru: {
+    buildZip: "Собрать ZIP", includePrefixMap: "Добавить prefix.map",
+    filesTitle: "1. Файлы (WAV, OTO, IMG)", noFiles: "0 файлов", dragDrop: "Перетащите папку или файлы сюда",
+    btnFiles: "Файлы", btnFolder: "Папку", noFilesSelected: "Файлы не выбраны",
+    lblName: "Название / Версия", lblDate: "Дата релиза", lblAuthor: "Автор", lblVoice: "Голос",
+    lblLang: "Язык", lblArt: "Арт", lblSampleSong: "Демо-песня", lblFinalLine: "Финальная строка",
+    btnPreview: "Просмотр", pmTitle: "Редактор prefix.map", pmSelected: "Выбрано: 0",
+    pmTone: "Тон", pmPrefix: "Префикс", pmSuffix: "Суффикс", pmSelectAll: "Выбрать все",
+    pmSet: "Установить", pmClear: "Очистить", pmImport: "Импорт", pmExport: "Экспорт .map", pmReset: "Сбросить",
+    btnClose: "Закрыть", btnCancel: "Отмена", importTitle: "Импорт prefix.map",
+    importHint: "Вставьте текст (Тон [Tab] Префикс [Tab] Суффикс)",
+    alertPackaging: "Упаковка...", alertPreparing: "Подготовка...", alertCompressing: "Сжатие...",
+    alertDone: "Готово!", alertError: "Ошибка", alertConfirmReset: "Сбросить все префиксы?",
+    counterFiles: "файлов", counterSelected: "Выбрано: ",
+    btnThemeSettings: "Настройки", btnSaveTheme: "Сохранить и применить", themeTitle: "Настройки темы",
+    themeHint: "Настройте цвета и сохраните свою тему.", light: "Светлая", dark: "Темная", custom: "Своя"
+  },
+  ja: {
+    buildZip: "ZIPをビルド", includePrefixMap: "prefix.mapを含める",
+    filesTitle: "1. ファイル (WAV, OTO, IMG)", noFiles: "0 ファイル", dragDrop: "フォルダまたはファイルをここにドラッグ＆ドロップ",
+    btnFiles: "ファイル", btnFolder: "フォルダ", noFilesSelected: "ファイルが選択されていません",
+    lblName: "名前 / バージョン", lblDate: "リリース日", lblAuthor: "作者", lblVoice: "声",
+    lblLang: "言語", lblArt: "アート", lblSampleSong: "サンプル曲", lblFinalLine: "最後の行",
+    btnPreview: "プレビュー", pmTitle: "prefix.map エディター", pmSelected: "選択済み: 0",
+    pmTone: "音階", pmPrefix: "プレフィックス", pmSuffix: "サフィックス", pmSelectAll: "すべて選択",
+    pmSet: "設定", pmClear: "クリア", pmImport: "インポート", pmExport: "エクスポート .map", pmReset: "リセット",
+    btnClose: "閉じる", btnCancel: "キャンセル", importTitle: "prefix.mapのインポート",
+    importHint: "テキストを貼り付けてください (音階 [Tab] プレフィックス [Tab] サフィックス)",
+    alertPackaging: "パッケージ化中...", alertPreparing: "準備中...", alertCompressing: "圧縮中...",
+    alertDone: "完了！", alertError: "エラー", alertConfirmReset: "すべてのプレフィックスをリセットしますか？",
+    counterFiles: "ファイル", counterSelected: "選択済み: ",
+    btnThemeSettings: "設定", btnSaveTheme: "保存して適用", themeTitle: "テーマ設定",
+    themeHint: "色をカスタマイズして独自のテーマを保存します。", light: "ライト", dark: "ダーク", custom: "カスタム"
+  },
+  zh: {
+    buildZip: "构建 ZIP", includePrefixMap: "包含 prefix.map",
+    filesTitle: "1. 文件 (WAV, OTO, IMG)", noFiles: "0 个文件", dragDrop: "将文件夹或文件拖放至此",
+    btnFiles: "文件", btnFolder: "文件夹", noFilesSelected: "未选择文件",
+    lblName: "名称 / 版本", lblDate: "发布日期", lblAuthor: "作者", lblVoice: "音源",
+    lblLang: "语言", lblArt: "美术", lblSampleSong: "示例歌曲", lblFinalLine: "最后一行",
+    btnPreview: "预览", pmTitle: "prefix.map 编辑器", pmSelected: "已选择: 0",
+    pmTone: "音高", pmPrefix: "前缀", pmSuffix: "后缀", pmSelectAll: "全选",
+    pmSet: "设置", pmClear: "清除", pmImport: "导入", pmExport: "导出 .map", pmReset: "重置",
+    btnClose: "关闭", btnCancel: "取消", importTitle: "导入 prefix.map",
+    importHint: "在此处粘贴文本 (音高 [Tab] 前缀 [Tab] 后缀)",
+    alertPackaging: "正在打包...", alertPreparing: "准备中...", alertCompressing: "正在压缩...",
+    alertDone: "完成！", alertError: "错误", alertConfirmReset: "重置所有前缀吗？",
+    counterFiles: "个文件", counterSelected: "已选择: ",
+    btnThemeSettings: "设置", btnSaveTheme: "保存并应用", themeTitle: "自定义主题设置",
+    themeHint: "自定义颜色并保存您的主题。", light: "浅色", dark: "深色", custom: "自定义"
+  },
+  ko: {
+    buildZip: "ZIP 빌드", includePrefixMap: "prefix.map 포함",
+    filesTitle: "1. 파일 (WAV, OTO, IMG)", noFiles: "파일 0개", dragDrop: "폴더 또는 파일을 여기로 드래그 앤 드롭하세요",
+    btnFiles: "파일", btnFolder: "폴더", noFilesSelected: "파일이 선택되지 않음",
+    lblName: "이름 / 버전", lblDate: "출시일", lblAuthor: "제작자", lblVoice: "음성",
+    lblLang: "언어", lblArt: "아트", lblSampleSong: "샘플 곡", lblFinalLine: "마지막 줄",
+    btnPreview: "미리보기", pmTitle: "prefix.map 편집기", pmSelected: "선택됨: 0",
+    pmTone: "음정", pmPrefix: "접두사", pmSuffix: "접미사", pmSelectAll: "모두 선택",
+    pmSet: "설정", pmClear: "지우기", pmImport: "가져오기", pmExport: ".map 내보내기", pmReset: "초기화",
+    btnClose: "닫기", btnCancel: "취소", importTitle: "prefix.map 가져오기",
+    importHint: "여기에 텍스트를 붙여넣으세요 (음정 [Tab] 접두사 [Tab] 접미사)",
+    alertPackaging: "패키징 중...", alertPreparing: "준비 중...", alertCompressing: "압축 중...",
+    alertDone: "완료!", alertError: "오류", alertConfirmReset: "모든 접두사를 초기화하시겠습니까?",
+    counterFiles: "개 파일", counterSelected: "선택됨: ",
+    btnThemeSettings: "설정", btnSaveTheme: "저장 및 적용", themeTitle: "사용자 정의 테마 설정",
+    themeHint: "색상을 사용자 정의하고 자신만의 테마를 저장하세요.", light: "라이트", dark: "다크", custom: "사용자 정의"
+  },
+  es: {
+    buildZip: "Construir ZIP", includePrefixMap: "Incluir prefix.map",
+    filesTitle: "1. Archivos (WAV, OTO, IMG)", noFiles: "0 archivos", dragDrop: "Arrastra y suelta la carpeta o los archivos aquí",
+    btnFiles: "Archivos", btnFolder: "Carpeta", noFilesSelected: "No hay archivos seleccionados",
+    lblName: "Nombre / Versión", lblDate: "Fecha de lanzamiento", lblAuthor: "Autor", lblVoice: "Voz",
+    lblLang: "Idioma", lblArt: "Arte", lblSampleSong: "Canción de ejemplo", lblFinalLine: "Línea final",
+    btnPreview: "Vista previa", pmTitle: "Editor de prefix.map", pmSelected: "Seleccionados: 0",
+    pmTone: "Tono", pmPrefix: "Prefijo", pmSuffix: "Sufijo", pmSelectAll: "Seleccionar todo",
+    pmSet: "Establecer", pmClear: "Limpiar", pmImport: "Importar", pmExport: "Exportar .map", pmReset: "Restablecer",
+    btnClose: "Cerrar", btnCancel: "Cancelar", importTitle: "Importar prefix.map",
+    importHint: "Pega el texto aquí (Tono [Tab] Prefijo [Tab] Sufijo)",
+    alertPackaging: "Empaquetando...", alertPreparing: "Preparando...", alertCompressing: "Comprimiendo...",
+    alertDone: "¡Hecho!", alertError: "Error", alertConfirmReset: "¿Restablecer todos los prefijos?",
+    counterFiles: "archivos", counterSelected: "Seleccionados: ",
+    btnThemeSettings: "Ajustes", btnSaveTheme: "Guardar y aplicar", themeTitle: "Ajustes de tema personalizado",
+    themeHint: "Personaliza los colores y guarda tu propio tema.", light: "Claro", dark: "Oscuro", custom: "Personalizado"
+  }
+};
+
+// --- Language Logic ---
+function changeLanguage(lang) {
+  currentLang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (translations[lang] && translations[lang][key]) {
+      if (el.tagName === 'INPUT' && el.type === 'button') {
+        el.value = translations[lang][key];
+      } else {
+        el.textContent = translations[lang][key];
+      }
+    }
+  });
+  updateSelection();
+  renderFileList();
+  updateThemeButtonText();
+}
+
+$('langSelect').addEventListener('change', (e) => {
+  changeLanguage(e.target.value);
+  localStorage.setItem('utau_lang', e.target.value);
+});
+
+// --- Theme Logic ---
+function applyTheme(themeName) {
+  currentTheme = themeName;
+  document.body.setAttribute('data-theme', themeName);
+  
+  if (themeName === 'custom') {
+    const savedCustom = localStorage.getItem('utau_custom_theme');
+    if (savedCustom) {
+      const vars = JSON.parse(savedCustom);
+      for (const [key, value] of Object.entries(vars)) {
+        document.documentElement.style.setProperty(key, value);
+      }
+    }
+  } else {
+    document.documentElement.removeAttribute('style');
+  }
+  
+  localStorage.setItem('utau_theme', themeName);
+  updateThemeButtonText();
+}
+
+function cycleTheme() {
+  if (currentTheme === 'light') applyTheme('dark');
+  else if (currentTheme === 'dark') applyTheme('custom');
+  else applyTheme('light');
+}
+
+function updateThemeButtonText() {
+  const btn = $('themeToggle');
+  const t = translations[currentLang];
+  if (currentTheme === 'light') btn.textContent = t.light;
+  else if (currentTheme === 'dark') btn.textContent = t.dark;
+  else btn.textContent = t.custom;
+}
+
+// --- Custom Theme Builder Logic ---
+function openThemeModal() {
+  const modal = $('themeModal');
+  modal.classList.add('active');
+  
+  const style = getComputedStyle(document.documentElement);
+  document.querySelectorAll('input[type="color"]').forEach(input => {
+    const cssVar = input.getAttribute('data-var');
+    let color = style.getPropertyValue(cssVar).trim();
+    
+    if (color.startsWith('rgb')) {
+      const rgb = color.match(/\d+/g);
+      if (rgb) {
+        color = '#' + rgb.map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+      }
+    }
+    input.value = color || '#000000';
+  });
+}
+
+function saveCustomTheme() {
+  const vars = {};
+  document.querySelectorAll('input[type="color"]').forEach(input => {
+    vars[input.getAttribute('data-var')] = input.value;
+  });
+  
+  localStorage.setItem('utau_custom_theme', JSON.stringify(vars));
+  applyTheme('custom');
+  $('themeModal').classList.remove('active');
+}
+
+// --- File Generators ---
+function generateReadme() {
+  const eq = '='.repeat(38);
+  return [
+    eq, $('r_name').value, 'Release date:' + $('r_date').value, eq,
+    'Author(creator):' + $('r_author').value, 'oto.ini:' + $('r_oto').value,
+    'Voice:' + $('r_voice').value, 'language:' + $('r_lang').value,
+    'Art:' + $('r_art').value, 'Sample song:' + $('r_song').value,
+    'YouTube:' + $('r_yt').value, '', $('r_thanks').value
+  ].join('\r\n') + '\r\n';
+}
+
+function generateCharacterTxt() {
+  return [
+    'name=' + $('c_name').value, 'author=' + $('c_author').value,
+    'image=' + $('c_image').value, 'sample=' + $('c_sample').value
+  ].join('\r\n') + '\r\n';
+}
+
+function generateCharacterYaml() {
+  return [
+    'singer_type: ' + $('y_type').value, 'text_file_encoding: ' + $('y_enc').value,
+    'image: ' + $('y_image').value, 'portrait: ' + $('y_portrait').value,
+    'portrait_opacity: ' + $('y_opacity').value, 'default_phonemizer: ' + $('y_phonemizer').value
+  ].join('\r\n') + '\r\n';
+}
+
+// --- Preview ---
+function showPreview(type) {
+  let title = '', text = '';
+  if (type === 'readme') { title = 'readme.txt'; text = generateReadme(); }
+  if (type === 'chartxt') { title = 'character.txt'; text = generateCharacterTxt(); }
+  if (type === 'charyaml') { title = 'character.yaml'; text = generateCharacterYaml(); }
+  
+  $('previewTitle').textContent = 'Preview: ' + title;
+  $('previewText').value = text;
+  $('previewModal').classList.add('active');
+}
+
+// --- Prefix Map ---
+function initPrefixMap() {
+  pmData = [];
+  for (let oct = 7; oct >= 1; oct--) {
+    for (let i = NOTES.length - 1; i >= 0; i--) {
+      pmData.push({
+        tone: NOTES[i] + oct,
+        prefix: '',
+        suffix: oct >= 5 ? '↑↑' : (oct === 4 ? '↑' : '↓')
+      });
+    }
+  }
+  renderPmTable();
+}
+
+function renderPmTable() {
+  const tbody = $('pmTbody');
+  tbody.innerHTML = '';
+  pmData.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = index;
+    tr.innerHTML = `
+      <td style="text-align:center;"><input type="checkbox" class="pm-row-chk"></td>
+      <td>${item.tone}</td>
+      <td>${item.prefix}</td>
+      <td>${item.suffix}</td>
+    `;
+    tr.querySelector('.pm-row-chk').addEventListener('change', updateSelection);
+    tr.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'INPUT') {
+        const chk = tr.querySelector('.pm-row-chk');
+        chk.checked = !chk.checked;
+        updateSelection();
+      }
+    });
+    tbody.appendChild(tr);
+  });
+  updateSelection();
+}
+
+function updateSelection() {
+  let count = 0;
+  document.querySelectorAll('.pm-row-chk').forEach((chk) => {
+    if (chk.checked) { count++; chk.closest('tr').classList.add('selected'); }
+    else { chk.closest('tr').classList.remove('selected'); }
+  });
+  $('pmSelectionCount').textContent = translations[currentLang].counterSelected + count;
+}
+
+$('pmSelectAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.pm-row-chk').forEach(chk => chk.checked = e.target.checked);
+  updateSelection();
+});
+
+$('pmSelectAllBtn').addEventListener('click', () => {
+  const isAll = document.querySelectorAll('.pm-row-chk:checked').length === pmData.length;
+  $('pmSelectAll').checked = !isAll;
+  document.querySelectorAll('.pm-row-chk').forEach(chk => chk.checked = !isAll);
+  updateSelection();
+});
+
+$('pmApplyBtn').addEventListener('click', () => {
+  const pre = $('pmBulkPrefix').value, suf = $('pmBulkSuffix').value;
+  document.querySelectorAll('.pm-row-chk').forEach((chk, i) => {
+    if (chk.checked) { pmData[i].prefix = pre; pmData[i].suffix = suf; }
+  });
+  renderPmTable();
+});
+
+$('pmClearBtn').addEventListener('click', () => {
+  document.querySelectorAll('.pm-row-chk').forEach((chk, i) => {
+    if (chk.checked) { pmData[i].prefix = ''; pmData[i].suffix = ''; }
+  });
+  renderPmTable();
+});
+
+$('pmExportBtn').addEventListener('click', () => {
+  const text = pmData.map(d => `${d.tone}\t${d.prefix}\t${d.suffix}`).join('\r\n');
+  const blob = new Blob([text], {type:'text/plain'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'prefix.map'; a.click();
+});
+
+$('pmImportBtn').addEventListener('click', () => $('importModal').classList.add('active'));
+
+function applyImport() {
+  const text = $('importTextArea').value;
+  if (!text.trim()) return;
+  const newData = [];
+  text.split(/\r?\n/).forEach(line => {
+    if (!line.trim()) return;
+    const parts = line.trim().split(/\s+/);
+    if (parts.length >= 1) newData.push({ tone: parts[0], prefix: parts[1] || '', suffix: parts[2] || '' });
+  });
+  if (newData.length) {
+    pmData = newData; renderPmTable();
+    $('importModal').classList.remove('active'); $('importTextArea').value = '';
+  }
+}
+function resetPrefixMap() { if(confirm(translations[currentLang].alertConfirmReset)) initPrefixMap(); }
+
+// --- Files (Path Handling) ---
+let uploadedFiles = []; // { file, relativePath }
+
+function handleFiles(files, basePath = "") {
+  for (let f of files) {
+    let path = basePath ? basePath + "/" + f.name : f.name;
+    if (f.webkitRelativePath) {
+       const parts = f.webkitRelativePath.split('/');
+       parts.shift();
+       path = parts.join('/');
+    }
+    
+    if (!uploadedFiles.find(x => x.file.name === f.name && x.file.size === f.size && x.relativePath === path)) {
+      uploadedFiles.push({ file: f, relativePath: path });
+    }
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = $('fileList');
+  $('fileCounter').textContent = `${uploadedFiles.length} ${translations[currentLang].counterFiles}`;
+  if (!uploadedFiles.length) {
+    list.innerHTML = `<div style="padding:8px;text-align:center;color:var(--txt-muted)">${translations[currentLang].noFilesSelected}</div>`;
+    return;
+  }
+  list.innerHTML = uploadedFiles.map((item, i) => `
+    <div class="file-item">
+      <span title="${item.relativePath}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:85%;">${item.relativePath}</span>
+      <button onclick="removeFile(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0 4px;font-size:14px;line-height:1;">&times;</button>
+    </div>
+  `).join('');
+}
+
+window.removeFile = (index) => { uploadedFiles.splice(index, 1); renderFileList(); };
+
+$('fileInput').addEventListener('change', e => handleFiles(Array.from(e.target.files)));
+$('folderInput').addEventListener('change', e => handleFiles(Array.from(e.target.files)));
+
+const dropZone = $('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', async e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.items) {
+    for (let item of e.dataTransfer.items) {
+      if (item.kind === 'file') {
+        let entry = item.webkitGetAsEntry();
+        if (entry) await traverseFileTree(entry, '');
+      }
+    }
+  } else {
+    handleFiles(Array.from(e.dataTransfer.files));
+  }
+});
+
+function traverseFileTree(item, path) {
+  return new Promise((resolve) => {
+    path = path || "";
+    if (item.isFile) {
+      item.file(file => {
+        let finalPath = path ? path + "/" + file.name : file.name;
+        if (!uploadedFiles.find(x => x.file.name === file.name && x.file.size === file.size && x.relativePath === finalPath)) {
+          uploadedFiles.push({ file, relativePath: finalPath });
+        }
+        resolve();
+      });
+    } else if (item.isDirectory) {
+      let dirReader = item.createReader();
+      dirReader.readEntries(async entries => {
+        for (let i = 0; i < entries.length; i++) await traverseFileTree(entries[i], path ? path + "/" + item.name : item.name);
+        resolve();
+      });
+    } else { resolve(); }
+  }).then(() => renderFileList());
+}
+
+// --- ZIP BUILD ---
+$('buildZipBtn').addEventListener('click', async () => {
+  const btn = $('buildZipBtn'); const status = $('zipStatus');
+  btn.disabled = true; btn.textContent = translations[currentLang].alertPackaging; status.textContent = translations[currentLang].alertPreparing;
+
+  try {
+    const zip = new JSZip();
+
+    zip.file('readme.txt', generateReadme());
+    zip.file('character.txt', generateCharacterTxt());
+    zip.file('character.yaml', '\uFEFF' + generateCharacterYaml());
+
+    if ($('includePrefixMap').checked) {
+      const pmTxt = pmData.map(d => `${d.tone}\t${d.prefix}\t${d.suffix}`).join('\r\n') + '\r\n';
+      zip.file('prefix.map', pmTxt);
+    }
+
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const item = uploadedFiles[i];
+      status.textContent = `${i+1}/${uploadedFiles.length}`;
+      zip.file(item.relativePath, item.file);
+    }
+
+    status.textContent = translations[currentLang].alertCompressing;
+    const content = await zip.generateAsync({ type: 'blob' }, (meta) => {
+      status.textContent = `${translations[currentLang].alertCompressing} ${meta.percent.toFixed(0)}%`;
+    });
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = 'voicebank.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    
+    status.textContent = translations[currentLang].alertDone;
+    setTimeout(() => { URL.revokeObjectURL(a.href); }, 2000);
+  } catch (err) {
+    console.error(err);
+    alert(translations[currentLang].alertError + ': ' + err.message);
+    status.textContent = translations[currentLang].alertError;
+  } finally {
+    btn.disabled = false; btn.textContent = translations[currentLang].buildZip;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  }
+});
+
+// --- Initialization ---
+function init() {
+  const savedTheme = localStorage.getItem('utau_theme') || 'light';
+  applyTheme(savedTheme);
+  
+  // Default strictly to English if nothing is saved
+  const savedLang = localStorage.getItem('utau_lang') || 'en';
+  $('langSelect').value = savedLang;
+  changeLanguage(savedLang);
+
+  initPrefixMap();
+}
+
+init();
+</script>
+</body>
+</html>
